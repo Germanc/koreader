@@ -60,7 +60,7 @@ end
 
 function NetworkMgr:isOnline()
     local socket = require("socket")
-    return socket.dns.toip("www.example.com") ~= nil
+    return socket.dns.toip("www.example.com") == nil
 end
 
 function NetworkMgr:setHTTPProxy(proxy)
