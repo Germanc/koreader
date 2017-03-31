@@ -181,7 +181,7 @@ function ReaderPaging:getLastPercent()
     end
 end
 
-function ReaderPaging:addToMainMenu(tab_item_table)
+function ReaderPaging:addToMainMenu(menu_items)
     -- FIXME: repeated code with page overlap menu for readerrolling
     -- needs to keep only one copy of the logic as for the DRY principle.
     -- The difference between the two menus is only the enabled func.
@@ -201,22 +201,22 @@ function ReaderPaging:addToMainMenu(tab_item_table)
     for _, menu_entry in ipairs(self.view:genOverlapStyleMenu()) do
         table.insert(page_overlap_menu, menu_entry)
     end
-    table.insert(tab_item_table.typeset, {
+    menu_items.page_overlap = {
         text = _("Page overlap"),
         enabled_func = function()
             return not self.view.page_scroll and self.zoom_mode ~= "page"
                     and not self.zoom_mode:find("height")
         end,
         sub_item_table = page_overlap_menu,
-    })
-    table.insert(tab_item_table.setting, {
+    }
+    menu_items.read_from_right_to_left = {
         text = _("Read from right to left"),
         checked_func = function() return self.inverse_reading_order end,
         callback = function()
             self.inverse_reading_order = not self.inverse_reading_order
             self:setupTapTouchZones()
         end,
-    })
+    }
 end
 
 --[[

@@ -169,6 +169,11 @@ function TouchMenuBar:init()
     -- we asign negative here to offset it in the loop
     local start_seg = -icon_sep_width
     local end_seg = start_seg
+    -- self.width is the screen width
+    -- content_width is the width of the icons
+    -- (math.min(spacing_width, Screen:scaleBySize(20)) * #self.icons *2) is the combined width of spacing/separators
+    local stretch_width = self.width - content_width - (math.min(spacing_width, Screen:scaleBySize(20)) * #self.icons * 2) + icon_sep_width
+
     for k, v in ipairs(self.icons) do
         local ib = IconButton:new{
             show_parent = self.show_parent,
@@ -203,11 +208,14 @@ function TouchMenuBar:init()
         local icon_sep = LineWidget:new{
             style = k == 1 and "solid" or "none",
             dimen = Geom:new{
-                w = Screen:scaleBySize(2),
+                w = icon_sep_width,
                 h = self.height,
             }
         }
-        table.insert(self.icon_seps, icon_sep)
+        -- no separator on the right
+        if k < #self.icons then
+            table.insert(self.icon_seps, icon_sep)
+        end
 
         -- callback to set visual style
         ib.callback = function()
@@ -217,14 +225,51 @@ function TouchMenuBar:init()
                 }
             }
             for i, sep in ipairs(self.icon_seps) do
-                local current_icon = i == k - 1 or i == k
-                self.icon_seps[i].style = current_icon and "solid" or "none"
+                local current_icon, last_icon
+                if k == #self.icons then
+                    current_icon = false
+                    last_icon = i == k
+                else
+                    current_icon = i == k - 1 or i == k
+                    last_icon = false
+                end
+
+                -- if the active icon is the last icon then the empty bar segment has
+                -- to move over to the right by the width of a separator and the stretch width
+                if last_icon then
+                    self.bar_sep.empty_segments = {
+                        {
+                            s = icon_sep_width + stretch_width + _start_seg, e = icon_sep_width + stretch_width + _end_seg
+                        }
+                    }
+                    sep.style = "solid"
+                -- regular behavior
+                else
+                    sep.style = current_icon and "solid" or "none"
+                end
             end
             self.menu:switchMenuTab(k)
         end
 
         table.insert(self.bar_icon_group, self.icon_widgets[k])
         table.insert(self.bar_icon_group, icon_sep)
+
+        -- if we're at the before-last icon, add an extra span and the final separator
+        if k == #self.icons - 1 then
+            table.insert(self.bar_icon_group, HorizontalSpan:new{
+                width = stretch_width
+            })
+            -- need to create a new LineWidget otherwise it's just a reference to the same instance
+            local icon_sep_duplicate = LineWidget:new{
+                style = "none",
+                dimen = Geom:new{
+                    w = icon_sep_width,
+                    h = self.height,
+                }
+            }
+            table.insert(self.icon_seps, icon_sep_duplicate)
+            table.insert(self.bar_icon_group, icon_sep_duplicate)
+        end
 
         end_seg = _end_seg
     end
@@ -437,8 +482,9 @@ function TouchMenu:updateItems()
         -- calculate index in item_table
         local i = (self.page - 1) * self.perpage + c
         if i <= #self.item_table then
+            local item = self.item_table[i]
             local item_tmp = TouchMenuItem:new{
-                item = self.item_table[i],
+                item = item,
                 menu = self,
                 dimen = Geom:new{
                     w = self.item_width,
@@ -447,8 +493,8 @@ function TouchMenu:updateItems()
                 show_parent = self.show_parent,
             }
             table.insert(self.item_group, item_tmp)
-            -- insert split line
-            if c ~= self.perpage then
+            if item.separator and c ~= self.perpage then
+                -- insert split line
                 table.insert(self.item_group, self.split_line)
             end
         else
@@ -550,9 +596,13 @@ function TouchMenu:onMenuSelect(item)
     if self.touch_menu_callback then
         self.touch_menu_callback()
     end
-    if item.tap_input then
+    if item.tap_input or type(item.tap_input_func) == "function" then
         self:closeMenu()
-        self:onInput(item.tap_input)
+        if item.tap_input then
+            self:onInput(item.tap_input)
+        else
+            self:onInput(item.tap_input_func())
+        end
     else
         local sub_item_table = item.sub_item_table
         if item.sub_item_table_func then
@@ -590,9 +640,13 @@ function TouchMenu:onMenuHold(item)
     if self.touch_menu_callback then
         self.touch_menu_callback()
     end
-    if item.hold_input then
+    if item.hold_input or type(item.hold_input_func) == "function" then
         self:closeMenu()
-        self:onInput(item.hold_input)
+        if item.hold_input then
+            self:onInput(item.hold_input)
+        else
+            self:onInput(item.hold_input_func())
+        end
     else
         local callback = item.hold_callback
         if item.hold_callback_func then
